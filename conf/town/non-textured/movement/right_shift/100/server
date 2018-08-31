@@ -1,0 +1,21 @@
+server_ip 127.0.0.1
+server_port 9487
+simplification_algorithm QUADRICTRI
+width 1280
+height 960
+color 1
+texture 0
+scale 100
+smooth 1
+renderingMode 1
+bandwidth 8000000
+gop 10
+framerate 1 30
+input_command_log results/right_shift.cmd
+model 0 models/town.ply
+model_pos 0 0 3 -40
+azimuth -90
+bandwidth_log results/non-textured/movement/right_shift/100/bw_log
+timing_log results/non-textured/movement/right_shift/100/timing_log
+mesh_percentage 100
+frame_output_path results/non-textured/movement/right_shift/100/server_frames

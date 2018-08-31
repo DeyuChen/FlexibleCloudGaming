@@ -1,0 +1,19 @@
+simplification_algorithm QUADRICTRI
+width 1280
+height 960
+color 1
+texture 1
+scale 100
+smooth 1
+renderingMode 1
+bandwidth 64000000
+gop 10
+framerate 1 30
+input_command_log results/command_log
+//output_command_log results/command_log
+model 0 models/town.ply
+model_pos 0 0 3 0
+bandwidth_log results/bw/64000000/bw_log
+timing_log results/bw/64000000/timing_log
+mesh_percentage 0
+frame_output_path results/bw/64000000/client_frames

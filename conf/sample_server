@@ -1,0 +1,25 @@
+server_ip 127.0.0.1
+server_port 9487
+simplification_algorithm QUADRICTRI
+width 1280
+height 960
+color 1
+texture 1
+scale 100
+smooth 1
+renderingMode 1
+bandwidth 8000000
+gop 10
+framerate 1 30
+//input_command_log output_log
+//output_command_log results/command_log
+//model 0 models/town.ply
+model 0 models/town/town.ply
+model_pos 0 0 3 0
+//bandwidth_log results/bw_log
+mesh_percentage 100
+//frame_output_path results/server_frames
+screenshot_path results/screenshot
+//delay_frames 1
+//offline_test 1
+azimuth 0

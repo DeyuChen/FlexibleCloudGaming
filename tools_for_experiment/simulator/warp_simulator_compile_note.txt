@@ -1,0 +1,1 @@
+g++ -std=c++11 warp_simulator.cpp -o warp_simulator `pkg-config --cflags --libs opencv`
