@@ -132,21 +132,21 @@ public:
     
     void keyPress(Sint32 key, int x, int y);
     
-    void setAzimuth(float _azimuth){
-        azimuth = _azimuth;
-    }
+    void setAzimuth(float _azimuth){azimuth = _azimuth;}
 
     // In order to change the full screen indicator, call flipFullScreen.
-    bool isFullScreen() {return bFullScreen_;}
+    bool isFullScreen(){return bFullScreen_;}
 
     // The mesh may be displayed in wireframe or filled-triangle mode
-    bool isFillTriMode() {return bFill_;}
-    void setFillTriMode(bool newFillbool) {bFill_ = newFillbool;}
+    bool isFillTriMode(){return bFill_;}
+    void setFillTriMode(bool newFillbool){bFill_ = newFillbool;}
 
     // The mesh may be flat shaded (Lambert shaded) or smooth (Gouraud) shaded
     bool isSmoothShadingMode(){return bSmooth_;}
     void setSmoothShadingMode(bool newSmooth){bSmooth_ = newSmooth;}
     void setColor(bool _color){color = _color;}
+    
+    void reloadVertexBuffer();
     
     void loadMesh(string filename);
     void loadPMesh(int meshID, Vec3 &pos, PMesh::EdgeCost g_edgemethod, int mesh_percentage);
@@ -163,13 +163,7 @@ public:
     bool subImage(AVFrame* orig, AVFrame* simp);
     bool subDepth(float* diff, float* orig, float* simp);
     
-    void reloadVertexBuffer();
-    
     void setRenderingMode(int mode){renderingMode = mode;}
-    
-    GLuint loadShaderFromFile(std::string path, GLenum shaderType);
-    
-    bool loadTransformProgram();
     
     /*
     void getCamera(float& _x, float& _y, float& _z, float& _elevation, float& _azimuth){

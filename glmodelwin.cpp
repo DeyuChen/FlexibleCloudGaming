@@ -216,6 +216,53 @@ void glModelWindow::keyPress(Sint32 key, int x, int y){
     }
 }
 
+void glModelWindow::reloadVertexBuffer(){
+    if (VBO.empty()){
+        VBO.resize(mesh_list.size());
+        for (int i = 0; i < mesh_list.size(); i++){
+            int numTex = mesh_list[i]->getNumTex() + 1;
+            VBO[i].resize(numTex);
+            for (int j = 0; j < mesh_list[i]->getNumTriangles(); j++){
+                triangle t = mesh_list[i]->getTri(j);
+                if (t.isActive()){
+                    int texid = t.getTexnumber() + 1;
+                    float *texcoord = t.getTexcoord();
+                    const vertex& v1 = t.getVert1vertex();
+                    VBO[i][texid].push_back(VertexBufferItem(v1.getArrayVerts(), v1.getArrayVertNorms(), v1.getArrayRGB(), texcoord));
+                    const vertex& v2 = t.getVert2vertex();
+                    VBO[i][texid].push_back(VertexBufferItem(v2.getArrayVerts(), v2.getArrayVertNorms(), v2.getArrayRGB(), texcoord + 2));
+                    const vertex& v3 = t.getVert3vertex();
+                    VBO[i][texid].push_back(VertexBufferItem(v3.getArrayVerts(), v3.getArrayVertNorms(), v3.getArrayRGB(), texcoord + 4));
+                }
+            }
+        }
+    }
+    
+    for (int i = 0; i < SVBO.size(); i++){
+        SVBO[i].clear();
+    }
+    SVBO.clear();
+    
+    SVBO.resize(pmesh_list.size());
+    for (int i = 0; i < pmesh_list.size(); i++){
+        int numTex = pmesh_list[i].mesh->getMesh()->getNumTex() + 1;
+        SVBO[i].resize(numTex);
+        for (int j = 0; j < pmesh_list[i].mesh->numTris(); j++){
+            triangle t;
+            if (pmesh_list[i].mesh->getTri(j, t) && t.isActive()){
+                int texid = t.getTexnumber() + 1;
+                float *texcoord = t.getTexcoord();
+                const vertex& v1 = t.getVert1vertex();
+                SVBO[i][texid].push_back(VertexBufferItem(v1.getArrayVerts(), v1.getArrayVertNorms(), v1.getArrayRGB(), texcoord));
+                const vertex& v2 = t.getVert2vertex();
+                SVBO[i][texid].push_back(VertexBufferItem(v2.getArrayVerts(), v2.getArrayVertNorms(), v2.getArrayRGB(), texcoord + 2));
+                const vertex& v3 = t.getVert3vertex();
+                SVBO[i][texid].push_back(VertexBufferItem(v3.getArrayVerts(), v3.getArrayVertNorms(), v3.getArrayRGB(), texcoord + 4));
+            }
+        }
+    }
+}
+
 void glModelWindow::loadMesh(string filename){
     Mesh *mesh = new Mesh(filename);
     if (mesh)
@@ -259,8 +306,7 @@ void glModelWindow::changeMesh(PMesh* mesh, int n, bool percentage){
     cout << "change number of triangles from " << old_tris << " to " << new_tris << endl;
 }
 
-bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *outframe, bool simplified, bool visible)
-{
+bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *outframe, bool simplified, bool visible){
     if (VBO.empty()){
         reloadVertexBuffer();
     }
@@ -404,8 +450,7 @@ bool glModelWindow::displayImage(unsigned char* inbuf){
     return true;
 }
 
-bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevframe, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *curframe)
-{
+bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevframe, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *curframe){
     //translate
     glm::mat4 mvp = curframe->mvp * glm::inverse(prevframe->mvp);
     
@@ -595,161 +640,6 @@ bool glModelWindow::subDepth(float* diff, float* orig, float* simp){
     for (int i = 0; i < width * height; i++){
         diff[i] = orig[i] - simp[i];
     }
-    
-    return true;
-}
-
-void glModelWindow::reloadVertexBuffer(){
-    if (VBO.empty()){
-        VBO.resize(mesh_list.size());
-        for (int i = 0; i < mesh_list.size(); i++){
-            int numTex = mesh_list[i]->getNumTex() + 1;
-            VBO[i].resize(numTex);
-            for (int j = 0; j < mesh_list[i]->getNumTriangles(); j++){
-                triangle t = mesh_list[i]->getTri(j);
-                if (t.isActive()){
-                    int texid = t.getTexnumber() + 1;
-                    float *texcoord = t.getTexcoord();
-                    const vertex& v1 = t.getVert1vertex();
-                    VBO[i][texid].push_back(VertexBufferItem(v1.getArrayVerts(), v1.getArrayVertNorms(), v1.getArrayRGB(), texcoord));
-                    const vertex& v2 = t.getVert2vertex();
-                    VBO[i][texid].push_back(VertexBufferItem(v2.getArrayVerts(), v2.getArrayVertNorms(), v2.getArrayRGB(), texcoord + 2));
-                    const vertex& v3 = t.getVert3vertex();
-                    VBO[i][texid].push_back(VertexBufferItem(v3.getArrayVerts(), v3.getArrayVertNorms(), v3.getArrayRGB(), texcoord + 4));
-                }
-            }
-        }
-    }
-    
-    for (int i = 0; i < SVBO.size(); i++){
-        SVBO[i].clear();
-    }
-    SVBO.clear();
-    
-    SVBO.resize(pmesh_list.size());
-    for (int i = 0; i < pmesh_list.size(); i++){
-        int numTex = pmesh_list[i].mesh->getMesh()->getNumTex() + 1;
-        SVBO[i].resize(numTex);
-        for (int j = 0; j < pmesh_list[i].mesh->numTris(); j++){
-            triangle t;
-            if (pmesh_list[i].mesh->getTri(j, t) && t.isActive()){
-                int texid = t.getTexnumber() + 1;
-                float *texcoord = t.getTexcoord();
-                const vertex& v1 = t.getVert1vertex();
-                SVBO[i][texid].push_back(VertexBufferItem(v1.getArrayVerts(), v1.getArrayVertNorms(), v1.getArrayRGB(), texcoord));
-                const vertex& v2 = t.getVert2vertex();
-                SVBO[i][texid].push_back(VertexBufferItem(v2.getArrayVerts(), v2.getArrayVertNorms(), v2.getArrayRGB(), texcoord + 2));
-                const vertex& v3 = t.getVert3vertex();
-                SVBO[i][texid].push_back(VertexBufferItem(v3.getArrayVerts(), v3.getArrayVertNorms(), v3.getArrayRGB(), texcoord + 4));
-            }
-        }
-    }
-}
-
-GLuint glModelWindow::loadShaderFromFile(std::string path, GLenum shaderType){
-    //Open file
-    GLuint shaderID = 0;
-    std::string shaderString;
-    std::ifstream sourceFile(path.c_str());
-
-    //Source file loaded
-    if (sourceFile){
-        //Get shader source
-        shaderString.assign((std::istreambuf_iterator<char>(sourceFile)), std::istreambuf_iterator<char>());
-
-        //Create shader ID
-        shaderID = glCreateShader(shaderType);
-
-        //Set shader source
-        const GLchar* shaderSource = shaderString.c_str();
-        glShaderSource(shaderID, 1, (const GLchar**)&shaderSource, NULL);
-
-        //Compile shader source
-        glCompileShader(shaderID);
-
-        //Check shader for errors
-        GLint shaderCompiled = GL_FALSE;
-        glGetShaderiv(shaderID, GL_COMPILE_STATUS, &shaderCompiled);
-        if (shaderCompiled != GL_TRUE){
-            printf("Unable to compile shader %d!\n\nSource:\n%s\n", shaderID, shaderSource);
-            glDeleteShader(shaderID);
-            shaderID = 0;
-        }
-    }
-    else {
-        printf("Unable to open file %s\n", path.c_str());
-    }
-
-    return shaderID;
-}
-
-bool glModelWindow::loadTransformProgram(){
-    transformPID = glCreateProgram();
-
-    GLuint vertexShader = loadShaderFromFile("SimpleTransform.glvs", GL_VERTEX_SHADER);
-    if (vertexShader == 0){
-        glDeleteProgram(transformPID);
-        transformPID = 0;
-        return false;
-    }
-    glAttachShader(transformPID, vertexShader);
-
-    GLuint fragmentShader = loadShaderFromFile("SingleColor.glfs", GL_FRAGMENT_SHADER);
-    if (fragmentShader == 0){
-        glDeleteShader(vertexShader);
-        glDeleteProgram(transformPID);
-        transformPID = 0;
-        return false;
-    }
-    glAttachShader(transformPID, fragmentShader);
-
-    glLinkProgram(transformPID);
-
-    //Check for errors
-    GLint programSuccess = GL_TRUE;
-    glGetProgramiv(transformPID, GL_LINK_STATUS, &programSuccess);
-    if (programSuccess != GL_TRUE){
-        printf("Error linking program %d!\n", transformPID);
-        glDeleteShader(vertexShader);
-        glDeleteShader(fragmentShader);
-        glDeleteProgram(transformPID);
-        transformPID = 0;
-        return false;
-    }
-
-    //Clean up excess shader references
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-    
-    MVPID = glGetUniformLocation(transformPID, "MVP");
-
-    /*
-    //Get variable locations
-    mVertexPos2DLocation = glGetAttribLocation(mProgramID, "LVertexPos2D");
-    if (mVertexPos2DLocation == -1){
-        printf("%s is not a valid glsl program variable!\n", "LVertexPos2D");
-    }
-
-    mMultiColor1Location = glGetAttribLocation(mProgramID, "LMultiColor1");
-    if (mMultiColor1Location == -1){
-        printf("%s is not a valid glsl program variable!\n", "LMultiColor1");
-    }
-
-    mMultiColor2Location = glGetAttribLocation(mProgramID, "LMultiColor2");
-    if (mMultiColor2Location == -1){
-        printf("%s is not a valid glsl program variable!\n", "LMultiColor2");
-    }
-
-    mProjectionMatrixLocation = glGetUniformLocation(mProgramID, "LProjectionMatrix");
-    if (mProjectionMatrixLocation == -1){
-        printf("%s is not a valid glsl program variable!\n", "LProjectionMatrix");
-    }
-
-    mModelViewMatrixLocation = glGetUniformLocation(mProgramID, "LModelViewMatrix");
-    if (mModelViewMatrixLocation == -1){
-        printf("%s is not a valid glsl program variable!\n", "LModelViewMatrix");
-    }
-    */
     
     return true;
 }
