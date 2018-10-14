@@ -51,7 +51,7 @@ public:
     int meshID;
 };
 
-class VertexBufferItem{
+class VertexBufferItem {
 public:
     VertexBufferItem(){}
     VertexBufferItem(const float* _pos, const float* _normal, const unsigned char* _rgb, const float* _texcoord){
@@ -92,69 +92,45 @@ public:
     glm::vec4 pos;
 };
 
-class glModelWindow
-{
+class glModelWindow {
 public:
 
     // constructor
     glModelWindow() : window(NULL), renderingMode(1),
                       width(0), height(0), oldWidth(0), oldHeight(0),
-                      oldX(0), oldY(0), newX(0), newY(0),
                       viewX(0), viewY(0), viewZ(0), moveSpeed(0.1),
                       bFullScreen_(false), bFill_(true), bSmooth_(false), color(false)
     {
         resetOrientation();
     };
 
-    ~glModelWindow() {};
+    ~glModelWindow(){};
 
     // resize the OpenGL window
     GLvoid reSizeScene(GLsizei width, GLsizei height);
-
-    // Initialize OpenGL
-    int initOpenGL(GLvoid);
-
-    // display the mesh within the window
-    bool displayMesh(unsigned char* inbuf, unsigned char* outbuf, bool simplified, bool visible);
-    bool displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, bool simplified, bool visible);
-    bool displayImage(unsigned char* inbuf);
-    bool displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevframe, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *curframe);
-    bool patchFrame(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame);
-        
-    bool subImage(unsigned char* diff, unsigned char* orig, unsigned char* simp);
-    bool subImage(short* diff, unsigned char* orig, unsigned char* simp);
-    bool subImage(AVFrame* orig, AVFrame* simp);
-    bool subDepth(float* diff, float* orig, float* simp);
-
-    // shutdown the OpenGL window
-    GLvoid killMyWindow(GLvoid);
-
-    // create the OpenGL window
-    bool createMyWindow(int width, int height, unsigned char bits, bool fullscreenflag);
-
-    // If in windowed mode, set to full screen mode.
-    // If in full screen mode, reset to windowed mode (width, height parameters 
-    // are ignored, the previous size of the window is used instead)
-    void flipFullScreen(int width, int height);
-
-    // deal with mesh rotation via mouse movement
-    void mouseMotion(int x, int y, bool leftButton, bool rightButton);
-
-    // set new mouse coordiantes
-    void setNewXY(int x, int y) {newX = x; newY = y;}
     
-    void keyPress(Sint32 key, int x, int y);
-
     // reset the mesh orientation
-    void resetOrientation() {
+    void resetOrientation(){
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         elevation = ORIG_ELEVATION;
         azimuth = ORIG_AZIMUTH;
         dist_ = ORIG_DIST;
-        oldX = newX = width / 2;
-        oldY = newY = height / 2;
     }
+
+    // Initialize OpenGL
+    int initOpenGL(GLvoid);
+
+    // create the OpenGL window
+    bool createMyWindow(const char* title, int width, int height, unsigned char bits, bool fullscreenflag);
+    
+    // shutdown the OpenGL window
+    GLvoid killMyWindow(GLvoid);
+
+    // deal with mesh rotation via mouse movement
+    void mouseMotion(int x, int y, bool leftButton, bool rightButton);
+    
+    void keyPress(Sint32 key, int x, int y);
     
     void setAzimuth(float _azimuth){
         azimuth = _azimuth;
@@ -168,16 +144,24 @@ public:
     void setFillTriMode(bool newFillbool) {bFill_ = newFillbool;}
 
     // The mesh may be flat shaded (Lambert shaded) or smooth (Gouraud) shaded
-    bool isSmoothShadingMode() {return bSmooth_;}
-    void setSmoothShadingMode(bool newSmooth) {bSmooth_ = newSmooth;}
+    bool isSmoothShadingMode(){return bSmooth_;}
+    void setSmoothShadingMode(bool newSmooth){bSmooth_ = newSmooth;}
     void setColor(bool _color){color = _color;}
-    
-    void changeMesh(PMesh* g_pProgMesh, int n, bool percentage);
-    
-    SDL_Window* getSDLWindow(){return window;}
     
     void loadMesh(string filename);
     void loadPMesh(int meshID, Vec3 &pos, PMesh::EdgeCost g_edgemethod, int mesh_percentage);
+    void changeMesh(PMesh* g_pProgMesh, int n, bool percentage);
+    
+    // display the mesh within the window
+    bool displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, bool simplified, bool visible);
+    bool displayImage(unsigned char* inbuf);
+    bool displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevframe, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *curframe);
+    bool patchFrame(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame);
+        
+    bool subImage(unsigned char* diff, unsigned char* orig, unsigned char* simp);
+    bool subImage(short* diff, unsigned char* orig, unsigned char* simp);
+    bool subImage(AVFrame* orig, AVFrame* simp);
+    bool subDepth(float* diff, float* orig, float* simp);
     
     void reloadVertexBuffer();
     
@@ -224,9 +208,6 @@ private:
     // previous window width, height
     int oldWidth;
     int oldHeight;
-
-    // used for mouse motion
-    int oldX, oldY, newX, newY;
     
     float viewX, viewY, viewZ;
     float moveSpeed;
@@ -261,8 +242,6 @@ private:
     vector<vector<vector<VertexBufferItem>>> SVBO;
     
     vector<VertexBufferItem> warpingBuf;
-    
-    int getIndex(int x, int y);
 };
 
 #endif

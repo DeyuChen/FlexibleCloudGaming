@@ -37,12 +37,6 @@ void handleKeys(unsigned char key, int x, int y);
 
 void handleMouse(int x, int y);
 
-//Per frame update
-void update();
-
-//Renders quad to the screen
-void render();
-
 //Frees media and shuts down SDL
 void close();
 
@@ -64,15 +58,14 @@ bool gRenderQuad = true;
 
 Configuration conf;
 
-bool init()
-{
+bool init(){
     //Initialization flag
     bool success = true;
     
     unsigned char depth = 16;
     bool bFullScreen = false;
     gWindow = new glModelWindow();
-    if (!gWindow || !gWindow->createMyWindow(conf.screen_width, conf.screen_height, depth, bFullScreen)){
+    if (!gWindow || !gWindow->createMyWindow("Server Window", conf.screen_width, conf.screen_height, depth, bFullScreen)){
         printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
         success = false;
     }
@@ -80,8 +73,7 @@ bool init()
     return success;
 }
 
-void handleKeys(Sint32 key, int x, int y)
-{
+void handleKeys(Sint32 key, int x, int y){
     //Toggle quad
     gWindow->keyPress(key, x, y);
 }
@@ -90,30 +82,7 @@ void handleMouse(int x, int y){
     gWindow->mouseMotion(x, y, false, false);
 }
 
-void update()
-{
-    //No per frame update needed
-}
-
-void render()
-{
-    //Clear color buffer
-    glClear(GL_COLOR_BUFFER_BIT);
-    
-    //Render quad
-    if (gRenderQuad)
-    {
-        glBegin(GL_QUADS);
-            glVertex2f(-0.5f, -0.5f);
-            glVertex2f(0.5f, -0.5f);
-            glVertex2f(0.5f, 0.5f);
-            glVertex2f(-0.5f, 0.5f);
-        glEnd();
-    }
-}
-
-void close()
-{
+void close(){
     gWindow->killMyWindow();
 }
 
