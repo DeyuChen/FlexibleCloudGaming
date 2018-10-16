@@ -66,6 +66,16 @@ public:
     float texcoord[2];
 };
 
+class ShaderUnit {
+public:
+    ShaderUnit(){}
+    GLuint VBO;
+    vector<GLuint> VAO;
+    vector<GLuint> coordVBO;
+    vector<GLuint> IBO;
+    vector<int> indSizes;
+};
+
 template<int WIDTH, int HEIGHT>
 class FrameInfo {
 public:    
@@ -234,6 +244,9 @@ private:
     
     vector<vector<vector<VertexBufferItem>>> VBO;
     vector<vector<vector<VertexBufferItem>>> SVBO;
+    
+    vector<ShaderUnit> origMeshes;
+    vector<ShaderUnit> simpMeshes;
     
     vector<VertexBufferItem> warpingBuf;
 };

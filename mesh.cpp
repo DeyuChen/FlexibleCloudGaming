@@ -101,7 +101,7 @@ bool Mesh::readPlyHeader(ifstream &ifs)
             if (v == "texturefile"){
                 iss >> v;
                 
-                cout << "Loading texture file: " << v << endl;
+                //cout << "Loading texture file: " << v << endl;
                 SDL_Surface *image = IMG_Load(v.c_str());
                 GLuint texture_id;
                 int mode;

@@ -237,6 +237,83 @@ void glModelWindow::reloadVertexBuffer(){
             }
         }
     }
+    if (origMeshes.empty()){
+        origMeshes.resize(mesh_list.size());
+        for (int i = 0; i < mesh_list.size(); i++){
+            GLfloat *buf = new GLfloat[9 * mesh_list[i]->getNumVerts()];
+            GLfloat *pbuf = buf;
+            float colors[3];
+            for (int j = 0; j < mesh_list[i]->getNumVerts(); j++){
+                vertex v = mesh_list[i]->getVertex(j);
+                const float *verts = v.getArrayVerts();
+                const float *norms = v.getArrayVertNorms();
+                const unsigned char *rgb = v.getArrayRGB();
+                for (int k = 0; k < 3; k++){
+                    colors[k] = (float)rgb[k] / 255.0;
+                }
+                memcpy(pbuf, verts, 3 * sizeof(GLfloat));
+                memcpy(pbuf + 3, norms, 3 * sizeof(GLfloat));
+                memcpy(pbuf + 6, colors, 3 * sizeof(GLfloat));
+                pbuf += 9;
+            }
+
+            glGenBuffers(1, &origMeshes[i].VBO);
+            glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].VBO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 9 * mesh_list[i]->getNumVerts(), buf, GL_STATIC_DRAW);
+
+            delete[] buf;
+
+
+
+            int numTex = mesh_list[i]->getNumTex() + 1;
+            vector<vector<GLfloat>> texCoord(numTex, vector<GLfloat>(2 * mesh_list[i]->getNumVerts()));
+            vector<vector<int>> indices(numTex);
+            for (int j = 0; j < mesh_list[i]->getNumTriangles(); j++){
+                triangle t = mesh_list[i]->getTri(j);
+                if (t.isActive()){
+                    int texid = t.getTexnumber() + 1;
+                    float *coord = t.getTexcoord();
+                    int v1 = t.getVert1Index();
+                    int v2 = t.getVert2Index();
+                    int v3 = t.getVert3Index();
+
+                    memcpy(&texCoord[texid][2 * v1], coord, 2 * sizeof(GLfloat));
+                    memcpy(&texCoord[texid][2 * v2], coord + 2, 2 * sizeof(GLfloat));
+                    memcpy(&texCoord[texid][2 * v3], coord + 4, 2 * sizeof(GLfloat));
+                    indices[texid].push_back(v1);
+                    indices[texid].push_back(v2);
+                    indices[texid].push_back(v3);
+                }
+            }
+
+            origMeshes[i].VAO.resize(numTex);
+            origMeshes[i].coordVBO.resize(numTex);
+            origMeshes[i].IBO.resize(numTex);
+            origMeshes[i].indSizes.resize(numTex, 0);
+            glGenVertexArrays(numTex, origMeshes[i].VAO.data());
+            glGenBuffers(numTex, origMeshes[i].coordVBO.data());
+            glGenBuffers(numTex, origMeshes[i].IBO.data());
+            for (int j = 0; j < numTex; j++){
+                glBindVertexArray(origMeshes[i].VAO[j]);
+
+                glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].VBO);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0);
+                glEnableVertexAttribArray(0);
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
+                glEnableVertexAttribArray(1);
+                glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
+                glEnableVertexAttribArray(2);
+
+                glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].coordVBO[j]);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2 * mesh_list[i]->getNumVerts(), texCoord[j].data(), GL_STATIC_DRAW);
+                glEnableVertexAttribArray(3);
+
+                origMeshes[i].indSizes[j] = indices[j].size();
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, origMeshes[i].IBO[j]);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * origMeshes[i].indSizes[j], indices[j].data(), GL_STATIC_DRAW);
+            }
+        }
+    }
     
     for (int i = 0; i < SVBO.size(); i++){
         SVBO[i].clear();
