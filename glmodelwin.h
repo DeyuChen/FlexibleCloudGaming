@@ -155,6 +155,8 @@ public:
     bool isSmoothShadingMode(){return bSmooth_;}
     void setSmoothShadingMode(bool newSmooth){bSmooth_ = newSmooth;}
     void setColor(bool _color){color = _color;}
+
+    GLuint loadShaderFromFile(string filename, GLenum shaderType);
     
     void reloadVertexBuffer();
     
@@ -245,6 +247,10 @@ private:
     vector<vector<vector<VertexBufferItem>>> VBO;
     vector<vector<vector<VertexBufferItem>>> SVBO;
     
+    GLuint vertexShader;
+    GLuint fragmentShader;
+    GLuint shaderProgram;
+
     vector<ShaderUnit> origMeshes;
     vector<ShaderUnit> simpMeshes;
     

@@ -63,6 +63,31 @@ int glModelWindow::initOpenGL(GLvoid){
     glEnable(GL_DEPTH_TEST);
 
     glEnable(GL_CULL_FACE); // backface culling
+
+    // load shader program
+    vertexShader = loadShaderFromFile("3DShader.vert", GL_VERTEX_SHADER);
+    fragmentShader = loadShaderFromFile("3DShader.frag", GL_FRAGMENT_SHADER);
+
+    shaderProgram = glCreateProgram();
+
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+
+    glBindAttribLocation(shaderProgram, 0, "in_Position");
+    glBindAttribLocation(shaderProgram, 1, "in_Normal");
+    glBindAttribLocation(shaderProgram, 2, "in_Color");
+    glBindAttribLocation(shaderProgram, 3, "in_TexCoord");
+
+    glLinkProgram(shaderProgram);
+
+    GLint isLinked = GL_TRUE;
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &isLinked);
+    if (isLinked == GL_FALSE){
+        cerr << "Failed to link shader program" << endl;
+        return false;
+    }
+
+    //glUniform1i(glGetUniformLocation(shaderProgram, "Texture"), 0);
     
     return true;
 }
@@ -96,7 +121,7 @@ bool glModelWindow::createMyWindow(const char* title, int _width, int _height, u
         success = false;
     }
     else {
-        //Use OpenGL 2.1
+        //Use OpenGL 3.0
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 
@@ -216,6 +241,43 @@ void glModelWindow::keyPress(Sint32 key, int x, int y){
     }
 }
 
+GLuint glModelWindow::loadShaderFromFile(string filename, GLenum shaderType){
+	GLuint shaderID = 0;
+	string content;
+	ifstream ifs(filename.c_str());
+
+    if (ifs){
+        content.assign((istreambuf_iterator<char>(ifs) ), istreambuf_iterator<char>());
+
+        shaderID = glCreateShader(shaderType);
+        const char *pcontent = content.c_str();
+        glShaderSource(shaderID, 1, (const GLchar**)&pcontent, NULL);
+        glCompileShader(shaderID);
+
+        GLint shaderCompiled = GL_FALSE;
+        glGetShaderiv(shaderID, GL_COMPILE_STATUS, &shaderCompiled);
+        if (shaderCompiled != GL_TRUE){
+            cerr << "Shader failed to compile" << endl;
+
+            int maxLength;
+            char *log;
+            glGetShaderiv(shaderID, GL_INFO_LOG_LENGTH, &maxLength);
+            log = (char *)malloc(maxLength);
+            glGetShaderInfoLog(shaderID, maxLength, &maxLength, log);
+            cout << log << endl;
+            free(log);
+
+            glDeleteShader(shaderID);
+            shaderID = 0;
+        }
+	}
+    else {
+        cout << "Open shader file failed" << endl;
+    }
+
+	return shaderID;
+}
+
 void glModelWindow::reloadVertexBuffer(){
     if (VBO.empty()){
         VBO.resize(mesh_list.size());
@@ -301,16 +363,19 @@ void glModelWindow::reloadVertexBuffer(){
                 glEnableVertexAttribArray(0);
                 glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
                 glEnableVertexAttribArray(1);
-                glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
+                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
                 glEnableVertexAttribArray(2);
 
                 glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].coordVBO[j]);
                 glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2 * mesh_list[i]->getNumVerts(), texCoord[j].data(), GL_STATIC_DRAW);
+                glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 0, 0);
                 glEnableVertexAttribArray(3);
 
                 origMeshes[i].indSizes[j] = indices[j].size();
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, origMeshes[i].IBO[j]);
                 glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * origMeshes[i].indSizes[j], indices[j].data(), GL_STATIC_DRAW);
+
+                glBindVertexArray(0);
             }
         }
     }
@@ -387,6 +452,9 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
     if (VBO.empty()){
         reloadVertexBuffer();
     }
+    if (origMeshes.empty()){
+        reloadVertexBuffer();
+    }
     
     // Set lookat point
     glLoadIdentity();
@@ -423,6 +491,7 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
         glPushMatrix();
         glTranslatef(pmesh_list[m].pos.x, pmesh_list[m].pos.y, pmesh_list[m].pos.z);
         if (simplified){
+            /*
             for (int i = 0; i < SVBO[m].size(); i++){
                 if (conf.texture){
                     glBindTexture(GL_TEXTURE_2D, pmesh_list[m].mesh->getMesh()->getTexID(i - 1));
@@ -448,8 +517,10 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
                 if (conf.texture)
                     glBindTexture(GL_TEXTURE_2D, 0);
             }
+            */
         }
         else {
+            /*
             for (int i = 0; i < VBO[pmesh_list[m].meshID].size(); i++){
                 if (conf.texture){
                     glBindTexture(GL_TEXTURE_2D, pmesh_list[m].mesh->getMesh()->getTexID(i - 1));
@@ -475,6 +546,20 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
                 if (conf.texture)
                     glBindTexture(GL_TEXTURE_2D, 0);
             }
+            */
+            glUseProgram(shaderProgram);
+            int meshID = pmesh_list[m].meshID;
+            for (int i = 0; i < origMeshes[meshID].VAO.size(); i++){
+                if (conf.texture){
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, pmesh_list[m].mesh->getMesh()->getTexID(i - 1));
+                }
+
+                glBindVertexArray(origMeshes[meshID].VAO[i]);
+                glDrawElements(GL_TRIANGLES, origMeshes[meshID].indSizes[i], GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
+            }
+            glUseProgram(0);
         }
         glPopMatrix();
     }
