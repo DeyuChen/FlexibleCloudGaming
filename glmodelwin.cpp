@@ -87,7 +87,7 @@ int glModelWindow::initOpenGL(GLvoid){
         return false;
     }
 
-    //glUniform1i(glGetUniformLocation(shaderProgram, "Texture"), 0);
+    glUniform1i(glGetUniformLocation(shaderProgram, "Texture"), 0);
     
     return true;
 }
@@ -455,6 +455,8 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
     if (origMeshes.empty()){
         reloadVertexBuffer();
     }
+
+    glUseProgram(shaderProgram);
     
     // Set lookat point
     glLoadIdentity();
@@ -463,6 +465,19 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
     glRotatef(elevation, 1, 0, 0);
     glRotatef(azimuth, 0, 1, 0);
     glTranslatef(viewX, viewY, viewZ);
+
+    glm::mat4 model, view, projection;
+    glGetFloatv(GL_MODELVIEW_MATRIX, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glGetFloatv(GL_PROJECTION_MATRIX, glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+    
+    glm::vec3 viewPos(viewX, viewY, viewZ);
+    glm::vec3 lightPos(0.0, 0.0, 10.0);
+    glm::vec3 lightColor(1.0, 1.0, 1.0);
+    glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(viewPos));
+    glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
+    glUniform3fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(lightColor));
     
     if (bSmooth_){
         glShadeModel(GL_SMOOTH); // already defined in initOpenGL
@@ -489,7 +504,10 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     for (int m = 0; m < pmesh_list.size(); m++){
         glPushMatrix();
+        glLoadIdentity();
         glTranslatef(pmesh_list[m].pos.x, pmesh_list[m].pos.y, pmesh_list[m].pos.z);
+        glGetFloatv(GL_MODELVIEW_MATRIX, glm::value_ptr(model));
+        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
         if (simplified){
             /*
             for (int i = 0; i < SVBO[m].size(); i++){
@@ -547,7 +565,6 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
                     glBindTexture(GL_TEXTURE_2D, 0);
             }
             */
-            glUseProgram(shaderProgram);
             int meshID = pmesh_list[m].meshID;
             for (int i = 0; i < origMeshes[meshID].VAO.size(); i++){
                 if (conf.texture){
@@ -559,10 +576,11 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
                 glDrawElements(GL_TRIANGLES, origMeshes[meshID].indSizes[i], GL_UNSIGNED_INT, 0);
                 glBindVertexArray(0);
             }
-            glUseProgram(0);
         }
         glPopMatrix();
     }
+
+    glUseProgram(0);
     
     if (inbuf != NULL && renderingMode != 0){
         if (renderingMode == 1){
@@ -590,11 +608,14 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, outframe->image);
     glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, outframe->depth);
     
+    /*
     glm::mat4 modelview;
     glGetFloatv(GL_MODELVIEW_MATRIX, glm::value_ptr(modelview));
     glm::mat4 projection;
     glGetFloatv(GL_PROJECTION_MATRIX, glm::value_ptr(projection));
     outframe->mvp = projection * modelview;
+    */
+    outframe->mvp = projection * view;
     
     return true;
 }
