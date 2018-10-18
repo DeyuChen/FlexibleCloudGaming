@@ -14,18 +14,14 @@ in vec2 ex_TexCoord;
 out vec4 fragColor;
 
 void main(void){
-    //fragColor = texture(Texture, ex_TexCoord);
-    
     float ambientStrength = 0.1;
     vec3 ambient = ambientStrength * lightColor;
   	
-    // diffuse 
     vec3 norm = normalize(ex_Normal);
     vec3 lightDir = normalize(lightPos - ex_FragPos);
     float diff = max(dot(norm, lightDir), 0.0);
     vec3 diffuse = diff * lightColor;
     
-    // specular
     float specularStrength = 0.5;
     vec3 viewDir = normalize(viewPos - ex_FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);  

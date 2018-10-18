@@ -97,19 +97,6 @@ bool glModelWindow::createMyWindow(const char* title, int _width, int _height, u
     width = _width;
     height = _height;
     
-    warpingBuf.resize(3 * width * height);
-    
-    float halfHeight = (float)height / 2;
-    float halfWidth = (float)width / 2;
-    int index = 0;
-    for (int h = 0; h < height; h++){
-        for (int w = 0; w < width; w++){
-            warpingBuf[index].pos[0] = (float)w / halfWidth - 1;
-            warpingBuf[index].pos[1] = (float)h / halfHeight - 1;
-            index++;
-        }
-    }
-
     bFullScreen_ = fullscreenflag;
     
     //Initialization flag
@@ -279,29 +266,10 @@ GLuint glModelWindow::loadShaderFromFile(string filename, GLenum shaderType){
 }
 
 void glModelWindow::reloadVertexBuffer(){
-    if (VBO.empty()){
-        VBO.resize(mesh_list.size());
-        for (int i = 0; i < mesh_list.size(); i++){
-            int numTex = mesh_list[i]->getNumTex() + 1;
-            VBO[i].resize(numTex);
-            for (int j = 0; j < mesh_list[i]->getNumTriangles(); j++){
-                triangle t = mesh_list[i]->getTri(j);
-                if (t.isActive()){
-                    int texid = t.getTexnumber() + 1;
-                    float *texcoord = t.getTexcoord();
-                    const vertex& v1 = t.getVert1vertex();
-                    VBO[i][texid].push_back(VertexBufferItem(v1.getArrayVerts(), v1.getArrayVertNorms(), v1.getArrayRGB(), texcoord));
-                    const vertex& v2 = t.getVert2vertex();
-                    VBO[i][texid].push_back(VertexBufferItem(v2.getArrayVerts(), v2.getArrayVertNorms(), v2.getArrayRGB(), texcoord + 2));
-                    const vertex& v3 = t.getVert3vertex();
-                    VBO[i][texid].push_back(VertexBufferItem(v3.getArrayVerts(), v3.getArrayVertNorms(), v3.getArrayRGB(), texcoord + 4));
-                }
-            }
-        }
-    }
     if (origMeshes.empty()){
         origMeshes.resize(mesh_list.size());
         for (int i = 0; i < mesh_list.size(); i++){
+            // load vertex information to a single VBO
             GLfloat *buf = new GLfloat[9 * mesh_list[i]->getNumVerts()];
             GLfloat *pbuf = buf;
             float colors[3];
@@ -327,6 +295,7 @@ void glModelWindow::reloadVertexBuffer(){
 
 
 
+            // load texture related information, each texture use one VAO
             int numTex = mesh_list[i]->getNumTex() + 1;
             vector<vector<GLfloat>> texCoord(numTex, vector<GLfloat>(2 * mesh_list[i]->getNumVerts()));
             vector<vector<int>> indices(numTex);
@@ -378,29 +347,93 @@ void glModelWindow::reloadVertexBuffer(){
                 glBindVertexArray(0);
             }
         }
+
+        // initialize simplified mesh and related buffers
+        simpMeshes.resize(pmesh_list.size());
+        for (int i = 0; i < pmesh_list.size(); i++){
+            glGenBuffers(1, &simpMeshes[i].VBO);
+            
+            int numTex = pmesh_list[i].mesh->getMesh()->getNumTex() + 1;
+            simpMeshes[i].VAO.resize(numTex);
+            simpMeshes[i].coordVBO.resize(numTex);
+            simpMeshes[i].IBO.resize(numTex);
+            simpMeshes[i].indSizes.resize(numTex, 0);
+            glGenVertexArrays(numTex, simpMeshes[i].VAO.data());
+            glGenBuffers(numTex, simpMeshes[i].coordVBO.data());
+            glGenBuffers(numTex, simpMeshes[i].IBO.data());
+        }
     }
     
-    for (int i = 0; i < SVBO.size(); i++){
-        SVBO[i].clear();
-    }
-    SVBO.clear();
-    
-    SVBO.resize(pmesh_list.size());
     for (int i = 0; i < pmesh_list.size(); i++){
-        int numTex = pmesh_list[i].mesh->getMesh()->getNumTex() + 1;
-        SVBO[i].resize(numTex);
-        for (int j = 0; j < pmesh_list[i].mesh->numTris(); j++){
-            triangle t;
-            if (pmesh_list[i].mesh->getTri(j, t) && t.isActive()){
-                int texid = t.getTexnumber() + 1;
-                float *texcoord = t.getTexcoord();
-                const vertex& v1 = t.getVert1vertex();
-                SVBO[i][texid].push_back(VertexBufferItem(v1.getArrayVerts(), v1.getArrayVertNorms(), v1.getArrayRGB(), texcoord));
-                const vertex& v2 = t.getVert2vertex();
-                SVBO[i][texid].push_back(VertexBufferItem(v2.getArrayVerts(), v2.getArrayVertNorms(), v2.getArrayRGB(), texcoord + 2));
-                const vertex& v3 = t.getVert3vertex();
-                SVBO[i][texid].push_back(VertexBufferItem(v3.getArrayVerts(), v3.getArrayVertNorms(), v3.getArrayRGB(), texcoord + 4));
+        PMesh *pmesh = pmesh_list[i].mesh;
+        // reload vertex information to a single VBO
+        GLfloat *buf = new GLfloat[9 * pmesh->getMesh()->getNumVerts()];
+        GLfloat *pbuf = buf;
+        float colors[3];
+        for (int j = 0; j < pmesh->getMesh()->getNumVerts(); j++){
+            vertex v = pmesh->getMesh()->getVertex(j);
+            const float *verts = v.getArrayVerts();
+            const float *norms = v.getArrayVertNorms();
+            const unsigned char *rgb = v.getArrayRGB();
+            for (int k = 0; k < 3; k++){
+                colors[k] = (float)rgb[k] / 255.0;
             }
+            memcpy(pbuf, verts, 3 * sizeof(GLfloat));
+            memcpy(pbuf + 3, norms, 3 * sizeof(GLfloat));
+            memcpy(pbuf + 6, colors, 3 * sizeof(GLfloat));
+            pbuf += 9;
+        }
+
+        glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].VBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 9 * pmesh->getMesh()->getNumVerts(), buf, GL_STATIC_DRAW);
+
+        delete[] buf;
+
+
+
+        // load texture related information, each texture use one VAO
+        int numTex = pmesh->getMesh()->getNumTex() + 1;
+        vector<vector<GLfloat>> texCoord(numTex, vector<GLfloat>(2 * pmesh->getMesh()->getNumVerts()));
+        vector<vector<int>> indices(numTex);
+        for (int j = 0; j < pmesh->numTris(); j++){
+            triangle t;
+            if (pmesh->getTri(j, t) && t.isActive()){
+                int texid = t.getTexnumber() + 1;
+                float *coord = t.getTexcoord();
+                int v1 = t.getVert1Index();
+                int v2 = t.getVert2Index();
+                int v3 = t.getVert3Index();
+
+                memcpy(&texCoord[texid][2 * v1], coord, 2 * sizeof(GLfloat));
+                memcpy(&texCoord[texid][2 * v2], coord + 2, 2 * sizeof(GLfloat));
+                memcpy(&texCoord[texid][2 * v3], coord + 4, 2 * sizeof(GLfloat));
+                indices[texid].push_back(v1);
+                indices[texid].push_back(v2);
+                indices[texid].push_back(v3);
+            }
+        }
+
+        for (int j = 0; j < numTex; j++){
+            glBindVertexArray(simpMeshes[i].VAO[j]);
+
+            glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].VBO);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
+            glEnableVertexAttribArray(2);
+
+            glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].coordVBO[j]);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2 * pmesh->getMesh()->getNumVerts(), texCoord[j].data(), GL_STATIC_DRAW);
+            glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, 0, 0);
+            glEnableVertexAttribArray(3);
+
+            simpMeshes[i].indSizes[j] = indices[j].size();
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, simpMeshes[i].IBO[j]);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * simpMeshes[i].indSizes[j], indices[j].data(), GL_STATIC_DRAW);
+
+            glBindVertexArray(0);
         }
     }
 }
@@ -449,9 +482,6 @@ void glModelWindow::changeMesh(PMesh* mesh, int n, bool percentage){
 }
 
 bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *outframe, bool simplified, bool visible){
-    if (VBO.empty()){
-        reloadVertexBuffer();
-    }
     if (origMeshes.empty()){
         reloadVertexBuffer();
     }
@@ -509,62 +539,18 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
         glGetFloatv(GL_MODELVIEW_MATRIX, glm::value_ptr(model));
         glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
         if (simplified){
-            /*
-            for (int i = 0; i < SVBO[m].size(); i++){
+            for (int i = 0; i < simpMeshes[m].VAO.size(); i++){
                 if (conf.texture){
+                    glActiveTexture(GL_TEXTURE0);
                     glBindTexture(GL_TEXTURE_2D, pmesh_list[m].mesh->getMesh()->getTexID(i - 1));
-                    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-                    glTexCoordPointer(2, GL_FLOAT, sizeof(VertexBufferItem), SVBO[m][i].data()->texcoord);
-                }
-                else {
-                    Vec3 c = pmesh_list[m].mesh->getMesh()->getTexColor(i - 1);
-                    glColor3ub(c.x, c.y, c.z);
                 }
 
-                glEnableClientState(GL_VERTEX_ARRAY);
-                glVertexPointer(3, GL_FLOAT, sizeof(VertexBufferItem), SVBO[m][i].data()->pos);
-                glEnableClientState(GL_NORMAL_ARRAY);
-                glNormalPointer(GL_FLOAT, sizeof(VertexBufferItem), SVBO[m][i].data()->normal);
-                
-                glDrawArrays(GL_TRIANGLES, 0, SVBO[m][i].size());
-                
-                glDisableClientState(GL_NORMAL_ARRAY);
-                glDisableClientState(GL_VERTEX_ARRAY);
-                glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-                
-                if (conf.texture)
-                    glBindTexture(GL_TEXTURE_2D, 0);
+                glBindVertexArray(simpMeshes[m].VAO[i]);
+                glDrawElements(GL_TRIANGLES, simpMeshes[m].indSizes[i], GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
             }
-            */
         }
         else {
-            /*
-            for (int i = 0; i < VBO[pmesh_list[m].meshID].size(); i++){
-                if (conf.texture){
-                    glBindTexture(GL_TEXTURE_2D, pmesh_list[m].mesh->getMesh()->getTexID(i - 1));
-                    glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-                    glTexCoordPointer(2, GL_FLOAT, sizeof(VertexBufferItem), VBO[pmesh_list[m].meshID][i].data()->texcoord);
-                }
-                else {
-                    Vec3 c = pmesh_list[m].mesh->getMesh()->getTexColor(i - 1);
-                    glColor3ub(c.x, c.y, c.z);
-                }
-                
-                glEnableClientState(GL_VERTEX_ARRAY);
-                glVertexPointer(3, GL_FLOAT, sizeof(VertexBufferItem), VBO[pmesh_list[m].meshID][i].data()->pos);
-                glEnableClientState(GL_NORMAL_ARRAY);
-                glNormalPointer(GL_FLOAT, sizeof(VertexBufferItem), VBO[pmesh_list[m].meshID][i].data()->normal);
-                
-                glDrawArrays(GL_TRIANGLES, 0, VBO[pmesh_list[m].meshID][i].size());
-                
-                glDisableClientState(GL_NORMAL_ARRAY);
-                glDisableClientState(GL_VERTEX_ARRAY);
-                glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-                
-                if (conf.texture)
-                    glBindTexture(GL_TEXTURE_2D, 0);
-            }
-            */
             int meshID = pmesh_list[m].meshID;
             for (int i = 0; i < origMeshes[meshID].VAO.size(); i++){
                 if (conf.texture){
@@ -608,13 +594,6 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, outframe->image);
     glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, outframe->depth);
     
-    /*
-    glm::mat4 modelview;
-    glGetFloatv(GL_MODELVIEW_MATRIX, glm::value_ptr(modelview));
-    glm::mat4 projection;
-    glGetFloatv(GL_PROJECTION_MATRIX, glm::value_ptr(projection));
-    outframe->mvp = projection * modelview;
-    */
     outframe->mvp = projection * view;
     
     return true;
@@ -647,37 +626,10 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
     
     int index;
 
-    // GPU warping
-    /*
-    glClear(GL_COLOR_BUFFER_BIT);
-    glUseProgram(transformPID);
-    glUniformMatrix4fv(MVPID, 1, GL_FALSE, glm::value_ptr(mvp));
-    
-    // loading vertex
-    index = 0;
-    for (int h = 0; h < height; h++){
-        for (int w = 0; w < width; w++){
-            warpingBuf[index].pos[2] = (prevframe->depth[index] - zPlus) / zMinus;
-            index++;
-        }
-    }
-    glDrawArrays(GL_POINTS, 0, warpingBuf.size());
-    glUseProgram(NULL);
-    */
-    
     unsigned char *warpedDiff = new unsigned char[3 * width * height];
     memset(warpedDiff, 127, 3 * width * height);
     float *warpedDepth = new float[width * height];
     memset(warpedDepth, 0, sizeof(float) * width * height);
-    
-    /*
-    if (conf.frame_output_path.length() != 0){
-        string fn = conf.frame_output_path + "/diff_" + to_string(prevframe->id) + ".rgb";
-        ofstream ofs(fn);
-        ofs.write((char *)prevframe->diff, 3 * width * height);
-        ofs.close();
-    }
-    */
     
     /* warping */
     index = 0;
@@ -735,15 +687,6 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
     
     delete[] warpedDiff2;
         
-    /*
-    if (conf.frame_output_path.length() != 0){
-        string fn = conf.frame_output_path + "/warped_diff_" + to_string(prevframe->id) + ".rgb";
-        ofstream ofs(fn);
-        ofs.write((char *)warpedDiff, 3 * width * height);
-        ofs.close();
-    }
-    */
-    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     if (renderingMode == 1){
         unsigned char* pixels = new unsigned char[3 * width * height];
@@ -752,15 +695,6 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
             pixels[i] = (unsigned char)max(min(2 * ((int)warpedDiff[i] - 127) + (int)curframe->image[i], 255), 0);
         }
         glDrawPixels(width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
-        
-        /*
-        if (conf.frame_output_path.length() != 0){
-            string fn = conf.frame_output_path + "/patched_" + to_string(curframe->id) + ".rgb";
-            ofstream ofs(fn);
-            ofs.write((char *)pixels, 3 * width * height);
-            ofs.close();
-        }
-        */
         
         delete [] pixels;
     }

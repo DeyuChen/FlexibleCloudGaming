@@ -51,21 +51,6 @@ public:
     int meshID;
 };
 
-class VertexBufferItem {
-public:
-    VertexBufferItem(){}
-    VertexBufferItem(const float* _pos, const float* _normal, const unsigned char* _rgb, const float* _texcoord){
-        memcpy(pos, _pos, 3 * sizeof(float));
-        memcpy(normal, _normal, 3 * sizeof(float));
-        memcpy(rgb, _rgb, 3 * sizeof(unsigned char));
-        memcpy(texcoord, _texcoord, 2 * sizeof(float));
-    }
-    float pos[3];
-    float normal[3];
-    unsigned char rgb[3];
-    float texcoord[2];
-};
-
 class ShaderUnit {
 public:
     ShaderUnit(){}
@@ -244,17 +229,12 @@ private:
     vector<Mesh*> mesh_list;
     vector<PMeshInfo> pmesh_list;
     
-    vector<vector<vector<VertexBufferItem>>> VBO;
-    vector<vector<vector<VertexBufferItem>>> SVBO;
-    
     GLuint vertexShader;
     GLuint fragmentShader;
     GLuint shaderProgram;
 
     vector<ShaderUnit> origMeshes;
     vector<ShaderUnit> simpMeshes;
-    
-    vector<VertexBufferItem> warpingBuf;
 };
 
 #endif
