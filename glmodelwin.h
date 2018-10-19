@@ -154,7 +154,6 @@ public:
     // display the mesh within the window
     bool displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, bool simplified, bool visible);
     bool displayImage(unsigned char* inbuf);
-    bool displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevframe, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *curframe);
     bool warpFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *target);
     bool patchFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *delta, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame);
         

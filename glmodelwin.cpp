@@ -104,8 +104,10 @@ int glModelWindow::initOpenGL(GLvoid){
 
     pixelPoints.VAO.resize(1);
     pixelPoints.VBO.resize(3);
+    pixelPoints.IBO.resize(1);
     glGenVertexArrays(1, pixelPoints.VAO.data());
     glGenBuffers(3, pixelPoints.VBO.data());
+    glGenBuffers(1, pixelPoints.IBO.data());
 
     glBindVertexArray(pixelPoints.VAO[0]);
 
@@ -122,14 +124,26 @@ int glModelWindow::initOpenGL(GLvoid){
     glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2 * width * height, pixelVertices, GL_STATIC_DRAW);
     delete[] pixelVertices;
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(0);
 
     // colors
     glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[1]);
     glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(1);
 
     // depths
     glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[2]);
     glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(2);
+
+    // index
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, pixelPoints.IBO[0]);
+    GLuint *pixelIndices = new GLuint[width * height];
+    for (int i = 0; i < width * height; i++){
+        pixelIndices[i] = i;
+    }
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * width * height, pixelIndices, GL_STATIC_DRAW);
+    delete[] pixelIndices;
 
     glBindVertexArray(0);
 
@@ -533,6 +547,9 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
     }
 
     glUseProgram(renderProgram.id);
+
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearDepth(1.0f);
     
     // Set lookat point
     glLoadIdentity();
@@ -647,6 +664,7 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
 
 bool glModelWindow::displayImage(unsigned char* inbuf){
     if (inbuf != NULL){
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawPixels(width, height, GL_RGB, GL_UNSIGNED_BYTE, inbuf);
     }
@@ -656,6 +674,7 @@ bool glModelWindow::displayImage(unsigned char* inbuf){
     return true;
 }
 
+#if 0
 bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevframe, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *curframe){
     //translate
     glm::mat4 mvp = curframe->mvp * glm::inverse(prevframe->mvp);
@@ -676,7 +695,6 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
     memset(warpedDepth, 0, sizeof(float) * width * height);
     
     /* warping */
-    /*
     index = 0;
     for (int h = 0; h < height; h++){
         for (int w = 0; w < width; w++){
@@ -696,7 +714,6 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
             index++;
         }
     }
-    */
     
     // hole filling
     unsigned char *warpedDiff2 = new unsigned char[3 * width * height];
@@ -758,9 +775,14 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
     
     return true;
 }
+#endif
 
 bool glModelWindow::warpFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *target){
     glUseProgram(warpProgram.id);
+
+    glLoadIdentity();
+    gluLookAt(0, 0, 0, 0, 0, -1, 0, 1, 0);
+
     glBindVertexArray(pixelPoints.VAO[0]);
 
     glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[1]);
@@ -772,19 +794,61 @@ bool glModelWindow::warpFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, F
     glm::mat4 mvp = target->mvp * glm::inverse(frame->mvp);
     glUniformMatrix4fv(glGetUniformLocation(warpProgram.id, "mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
 
-    glClearColor(0.0, 0.0, 0.0, 1.0);
+    float grey = 127.0 / 255.0;
+    glClearColor(grey, grey, grey, 1.0f);
+    glClearDepth(1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDrawElements(GL_POINTS, width * height, GL_UNSIGNED_INT, NULL);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, target->image);
 
+    // hole filling
+    int index;
+    unsigned char *buf = new unsigned char[3 * width * height];
+    float *depth = new float[width * height];
+    glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth);
+    
+    for (int n = 0; n < HOLE_FILL_ROUND; n++){
+        index = width + 1;
+        memcpy(buf, target->image, 3 * width * height);
+        for (int h = 1; h < height - 1; h++){
+            for (int w = 1; w < width - 1; w++){
+                if (depth[index] == 1){
+                    int count = 0, rsum = 0, gsum = 0, bsum = 0;
+                    for (int y = h - 1; y <= h + 1; y++){
+                        for (int x = w - 1; x <= w + 1; x++){
+                            int index2 = getIndex(x, y, width);
+                            if (depth[index2] != 1){
+                                count++;
+                                rsum += (int)buf[3 * index2];
+                                gsum += (int)buf[3 * index2 + 1];
+                                bsum += (int)buf[3 * index2 + 2];
+                            }
+                        }
+                    }
+                    if (count > 0){
+                        target->image[3 * index] = rsum / count;
+                        target->image[3 * index + 1] = gsum / count;
+                        target->image[3 * index + 2] = bsum / count;
+                    }
+                }
+                index++;
+            }
+            index += 2;
+        }
+    }
+    
+    delete[] buf;
+    delete[] depth;
+
     glBindVertexArray(0);
     glUseProgram(0);
+
+    return true;
 }
 
 bool glModelWindow::patchFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *delta, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame){
     if (delta->mvp != frame->mvp){
         // warp needed
-        cout << "warp needed" << endl;
         FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> target;
         target.mvp = frame->mvp;
         warpFrame(delta, &target);

@@ -243,6 +243,9 @@ int main(int argc, char* args[]){
         FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *delta = new FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT>;
         
         srand(time(NULL));
+        
+        // for artificial delay experiment
+        int remaining_delay = conf.delay_frames;
 
         //While application is running
         while(!quit){
@@ -331,9 +334,18 @@ int main(int argc, char* args[]){
             gWindow->displayMesh(NULL, &frames[buffer_tail], true, false);
             buffer_tail = (buffer_tail + 1) % buffer_size;
             
+            // for artificial delay experiment
+            if (remaining_delay > 0){
+                pts++;
+                remaining_delay--;
+                buffer_head = (buffer_head + 1) % buffer_size;
+                continue;
+            }
+            
             int n_events = epoll_wait(pollfd, events, MAX_EPOLL_EVENTS, -1); // wait indefinitely for test
             if (n_events > 0){
-                for (int i = 0; i < n_events; i++){
+                //for (int i = 0; i < n_events; i++){
+                for (int i = 0; i < 1; i++){
                     av_init_packet(&pkt);
                     
                     memset(inbuf, 0, inbufsize + FF_INPUT_BUFFER_PADDING_SIZE);
@@ -396,7 +408,7 @@ int main(int argc, char* args[]){
                                 gWindow->displayImage(frames[buffer_head].image);
                                 break;
                             case 2:     // display delta frame
-                                gWindow->displayImage(frameRGB->data[0]);
+                                gWindow->displayImage(delta->image);
                                 break;
                         }
 
@@ -421,7 +433,6 @@ int main(int argc, char* args[]){
                         }
 
                         buffer_head = (buffer_head + 1) % buffer_size;
-
                         pts++;
                     }
                 }
