@@ -54,11 +54,19 @@ public:
 class ShaderUnit {
 public:
     ShaderUnit(){}
-    GLuint VBO;
+    vector<GLuint> VBO;
     vector<GLuint> VAO;
     vector<GLuint> coordVBO;
     vector<GLuint> IBO;
     vector<int> indSizes;
+};
+
+class ShaderProgram {
+public:
+    ShaderProgram(){}
+    GLuint id;
+    GLuint vertexShader;
+    GLuint fragmentShader;
 };
 
 template<int WIDTH, int HEIGHT>
@@ -66,25 +74,19 @@ class FrameInfo {
 public:    
     FrameInfo(){
         id = 0;
-        patched = false;
         image = new unsigned char[3 * WIDTH * HEIGHT];
-        diff = new unsigned char[3 * WIDTH * HEIGHT];
         depth = new float[WIDTH * HEIGHT];
     };
     
     ~FrameInfo(){
         delete[] image;
-        delete[] diff;
         delete[] depth;
     }
     
     unsigned long long id;
-    bool patched;
     unsigned char *image;
-    unsigned char *diff;
     float *depth;
     glm::mat4 mvp;
-    glm::vec4 pos;
 };
 
 class glModelWindow {
@@ -92,7 +94,7 @@ public:
 
     // constructor
     glModelWindow() : window(NULL), renderingMode(1),
-                      width(0), height(0), oldWidth(0), oldHeight(0),
+                      width(0), height(0),
                       viewX(0), viewY(0), viewZ(0), moveSpeed(0.1),
                       bFullScreen_(false), bFill_(true), bSmooth_(false), color(false)
     {
@@ -153,7 +155,8 @@ public:
     bool displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, bool simplified, bool visible);
     bool displayImage(unsigned char* inbuf);
     bool displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevframe, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *curframe);
-    bool patchFrame(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame);
+    bool warpFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *target);
+    bool patchFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *delta, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame);
         
     bool subImage(unsigned char* diff, unsigned char* orig, unsigned char* simp);
     bool subImage(short* diff, unsigned char* orig, unsigned char* simp);
@@ -195,10 +198,6 @@ private:
     // width, height of window
     int width;
     int height;
-
-    // previous window width, height
-    int oldWidth;
-    int oldHeight;
     
     float viewX, viewY, viewZ;
     float moveSpeed;
@@ -228,13 +227,13 @@ private:
     
     vector<Mesh*> mesh_list;
     vector<PMeshInfo> pmesh_list;
-    
-    GLuint vertexShader;
-    GLuint fragmentShader;
-    GLuint shaderProgram;
+
+    ShaderProgram renderProgram;
+    ShaderProgram warpProgram;
 
     vector<ShaderUnit> origMeshes;
     vector<ShaderUnit> simpMeshes;
+    ShaderUnit pixelPoints;
 };
 
 #endif

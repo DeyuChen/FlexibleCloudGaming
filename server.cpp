@@ -109,8 +109,6 @@ int main(int argc, char* args[])
     int got_output;
     int framesize = conf.screen_width * conf.screen_height;
     int RGBFramesize = framesize * 3;
-    short *originalDiff = new short[RGBFramesize];
-    //unsigned char *imageDiff = new unsigned char[RGBFramesize];
     int YUVFramesize = framesize * 3 / 2;
     char *outbuf = new char[RGBFramesize];
     AVCodec *codec, *codec_depth;
@@ -307,7 +305,6 @@ int main(int argc, char* args[])
             
             if (!quit){
                 int x = 0, y = 0;
-                //SDL_GetMouseState(&x, &y);
                 int shift = 4;
                 memcpy((void *)&x, inbuf + shift, sizeof(x));
                 shift += sizeof(x);
@@ -330,34 +327,20 @@ int main(int argc, char* args[])
                     }
                 }
                 
-#if 1
                 // render original content
-                //gWindow->displayMesh(NULL, frameRGB->data[0], false, false);
                 gWindow->displayMesh(NULL, &frame_high, false, false);
-                /*
-                if (conf.frame_output_path.length() != 0){
-                    string fn = conf.frame_output_path + "/" + to_string(pts) + ".rgb";
-                    ofstream ofs(fn);
-                    //ofs.write((char *)frameRGB->data[0], RGBFramesize);
-                    ofs.write((char *)frame_high.image, RGBFramesize);
-                    ofs.close();
-                }
-                */
                 
                 // render simplified content
-                //gWindow->displayMesh(NULL, imageDiff, true, false);
                 gWindow->displayMesh(NULL, &frame_low, true, false);
                 
                 // calculate the difference
                 gWindow->subImage(frameRGB->data[0], frame_high.image, frame_low.image);
-                gWindow->subImage(originalDiff, frame_high.image, frame_low.image);
                 if (conf.send_depth_diff)
                     gWindow->subDepth((float *)frameDepthRGB->data[0], frame_high.depth, frame_low.depth);
                 
                 if (capture && conf.screenshot_path.length() != 0){
                     string fn = conf.screenshot_path + "/" + to_string(n_screenshot) + ".rgb";
                     ofstream ofs(fn);
-                    //ofs.write((char *)imageDiff, RGBFramesize);
                     ofs.write((char *)frame_low.image, RGBFramesize);
                     ofs.close();
                     
@@ -397,40 +380,6 @@ int main(int argc, char* args[])
                 sws_scale(swsContext, frameRGB->data, frameRGB->linesize, 0, conf.screen_height, frameYUV->data, frameYUV->linesize);
                 if (conf.send_depth_diff)
                     sws_scale(swsContext2, frameDepthRGB->data, frameDepthRGB->linesize, 0, conf.screen_height, frameDepthYUV->data, frameDepthYUV->linesize);
-                
-                /*
-                if (conf.frame_output_path.length() != 0){
-                    sws_scale(swsContextR, frameYUV->data, frameYUV->linesize, 0, conf.screen_height, frameRGB->data, frameRGB->linesize);
-                    fn = conf.frame_output_path + "/" + to_string(pts) + ".diff2";
-                    ofs.open(fn);
-                    ofs.write((char *)frameRGB->data[0], RGBFramesize);
-                    ofs.close();
-                }
-                */
-                
-#else
-                gWindow->displayMesh(NULL, frameRGB->data[0], false, false);
-                sws_scale(swsContext, frameRGB->data, frameRGB->linesize, 0, conf.screen_height, frameYUV->data, frameYUV->linesize);
-
-                if (conf.frame_output_path.length() != 0){
-                    string fn = conf.frame_output_path + "/" + to_string(pts) + ".rgb";
-                    ofstream ofs(fn);
-                    ofs.write((char *)frameRGB->data[0], RGBFramesize);
-                    ofs.close();
-                }
-                
-                gWindow->displayMesh(NULL, frameRGB->data[0], true, false);
-                sws_scale(swsContext, frameRGB->data, frameRGB->linesize, 0, conf.screen_height, frameYUV2->data, frameYUV2->linesize);
-                
-                if (conf.mesh_percentage != 0)
-                    gWindow->subImage(frameYUV, frameYUV2);
-                if (capture && conf.screenshot_path.length() != 0){
-                    string fn = conf.screenshot_path + "/" + to_string(n_screenshot) + ".rgb";
-                    ofstream ofs(fn);
-                    ofs.write((char *)frameRGB->data[0], RGBFramesize);
-                    ofs.close();
-                }
-#endif
                 
                 // encode image residue
                 av_init_packet(&pkt);
@@ -484,8 +433,6 @@ int main(int argc, char* args[])
         
         delete[] inbuf;
         delete[] outbuf;
-        delete[] originalDiff;
-        //delete[] imageDiff;
     }
 
     //Free resources and close SDL

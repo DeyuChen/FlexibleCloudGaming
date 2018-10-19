@@ -236,6 +236,12 @@ int main(int argc, char* args[]){
         //auto next_ts = chrono::high_resolution_clock::now();
         //int ntickets = 0;
         
+        int buffer_size = conf.delay_frames + 1;
+        FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frames = new FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT>[buffer_size];
+        size_t buffer_head = 0;    // to patch and display
+        size_t buffer_tail = 0;    // to insert new frame
+        FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *delta = new FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT>;
+        
         srand(time(NULL));
 
         //While application is running
@@ -319,11 +325,11 @@ int main(int argc, char* args[]){
             memcpy(outbuf, &size, sizeof(int));
             send(sockfd, outbuf, size, 0);
             
-            FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> frame;
-            frame.id = pts;
+            frames[buffer_tail].id = pts;
             //cout << "render pts: " << pts << endl;
             
-            gWindow->displayMesh(NULL, &frame, true, false);
+            gWindow->displayMesh(NULL, &frames[buffer_tail], true, false);
+            buffer_tail = (buffer_tail + 1) % buffer_size;
             
             int n_events = epoll_wait(pollfd, events, MAX_EPOLL_EVENTS, -1); // wait indefinitely for test
             if (n_events > 0){
@@ -366,20 +372,37 @@ int main(int argc, char* args[]){
                         
                         sws_scale(swsContext, frameYUV->data, frameYUV->linesize, 0, conf.screen_height, frameRGB->data, frameRGB->linesize);
                         
+                        // copy data to delta frame
+                        memcpy(delta->image, frameRGB->data[0], RGBFramesize);
+                        memset(delta->depth, 0, sizeof(float) * framesize);
+                        for (int i = 0; i < buffer_size; i++){
+                            if (frames[i].id == rcv_pts){
+                                delta->mvp = frames[i].mvp;
+                                memcpy(delta->depth, &frames[i].depth, sizeof(float) * framesize);
+                            }
+                        }
+                        // TODO: cases when a corresponding frame cannot be found
+                        
                         if (conf.bandwidth_log.is_open()){
                             conf.bandwidth_log << pts << " " << pkt.size << endl;
                         }
                         
-                        string fn;
-                        ofstream ofs;
-                        
+                        switch (conf.renderingMode){
+                            case 0:     // display unpatched frame
+                                gWindow->displayImage(frames[buffer_head].image);
+                                break;
+                            case 1:     // display patched frame
+                                gWindow->patchFrame(delta, &frames[buffer_head]);
+                                gWindow->displayImage(frames[buffer_head].image);
+                                break;
+                            case 2:     // display delta frame
+                                gWindow->displayImage(frameRGB->data[0]);
+                                break;
+                        }
+
                         if (conf.frame_output_path.length() != 0){
-                            /*
-                            fn = conf.frame_output_path + "/" + to_string(pts) + ".diff3";
-                            ofs.open(fn);
-                            ofs.write((char *)frameRGB->data[0], RGBFramesize);
-                            ofs.close();
-                            */
+                            string fn;
+                            ofstream ofs;
                             
                             fn = conf.frame_output_path + "/" + to_string(pts) + "_diff.rgb";
                             ofs.open(fn);
@@ -388,27 +411,16 @@ int main(int argc, char* args[]){
                             
                             fn = conf.frame_output_path + "/" + to_string(pts) + ".rgb";
                             ofs.open(fn);
-                            ofs.write((char *)frame.image, RGBFramesize);
+                            ofs.write((char *)frames[buffer_head].image, RGBFramesize);
                             ofs.close();
                             
                             fn = conf.frame_output_path + "/" + to_string(pts) + ".mvp";
                             ofs.open(fn);
-                            ofs.write((char *)&frame.mvp[0][0], sizeof(frame.mvp));
+                            ofs.write((char *)&frames[buffer_head].mvp[0][0], sizeof(frames[buffer_head].mvp));
                             ofs.close();
                         }
-                        
-                        switch (conf.renderingMode){
-                            case 0:
-                                gWindow->displayImage(frame.image);
-                                break;
-                            case 1:
-                                gWindow->patchFrame(frameRGB->data[0], &frame);
-                                gWindow->displayImage(frame.image);
-                                break;
-                            case 2:
-                                gWindow->displayImage(frameRGB->data[0]);
-                                break;
-                        }
+
+                        buffer_head = (buffer_head + 1) % buffer_size;
 
                         pts++;
                     }
@@ -418,6 +430,8 @@ int main(int argc, char* args[]){
         
         delete[] outbuf;
         delete[] inbuf;
+        delete[] frames;
+        delete delta;
     }
 
     //Free resources and close SDL

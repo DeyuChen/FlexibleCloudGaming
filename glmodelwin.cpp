@@ -56,39 +56,83 @@ int glModelWindow::initOpenGL(GLvoid){
     glDepthFunc(GL_LEQUAL);
     glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
-    // Enable lights and lighting
-    glEnable(GL_LIGHT0); // default value is (1.0, 1.0, 1.0, 1.0)
-    glEnable(GL_LIGHTING);
+    // load 3D shader program
+    renderProgram.vertexShader = loadShaderFromFile("3DShader.vert", GL_VERTEX_SHADER);
+    renderProgram.fragmentShader = loadShaderFromFile("3DShader.frag", GL_FRAGMENT_SHADER);
 
-    glEnable(GL_DEPTH_TEST);
+    renderProgram.id = glCreateProgram();
 
-    glEnable(GL_CULL_FACE); // backface culling
+    glAttachShader(renderProgram.id, renderProgram.vertexShader);
+    glAttachShader(renderProgram.id, renderProgram.fragmentShader);
 
-    // load shader program
-    vertexShader = loadShaderFromFile("3DShader.vert", GL_VERTEX_SHADER);
-    fragmentShader = loadShaderFromFile("3DShader.frag", GL_FRAGMENT_SHADER);
+    glBindAttribLocation(renderProgram.id, 0, "in_Position");
+    glBindAttribLocation(renderProgram.id, 1, "in_Normal");
+    glBindAttribLocation(renderProgram.id, 2, "in_Color");
+    glBindAttribLocation(renderProgram.id, 3, "in_TexCoord");
 
-    shaderProgram = glCreateProgram();
-
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-
-    glBindAttribLocation(shaderProgram, 0, "in_Position");
-    glBindAttribLocation(shaderProgram, 1, "in_Normal");
-    glBindAttribLocation(shaderProgram, 2, "in_Color");
-    glBindAttribLocation(shaderProgram, 3, "in_TexCoord");
-
-    glLinkProgram(shaderProgram);
+    glLinkProgram(renderProgram.id);
 
     GLint isLinked = GL_TRUE;
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &isLinked);
+    glGetProgramiv(renderProgram.id, GL_LINK_STATUS, &isLinked);
     if (isLinked == GL_FALSE){
         cerr << "Failed to link shader program" << endl;
         return false;
     }
 
-    glUniform1i(glGetUniformLocation(shaderProgram, "Texture"), 0);
+    glUniform1i(glGetUniformLocation(renderProgram.id, "Texture"), 0);
     
+    // load warp shader program
+    warpProgram.vertexShader = loadShaderFromFile("warpShader.vert", GL_VERTEX_SHADER);
+    warpProgram.fragmentShader = loadShaderFromFile("warpShader.frag", GL_FRAGMENT_SHADER);
+
+    warpProgram.id = glCreateProgram();
+
+    glAttachShader(warpProgram.id, warpProgram.vertexShader);
+    glAttachShader(warpProgram.id, warpProgram.fragmentShader);
+
+    glBindAttribLocation(warpProgram.id, 0, "in_Position");
+    glBindAttribLocation(warpProgram.id, 1, "in_Color");
+    glBindAttribLocation(warpProgram.id, 2, "in_Depth");
+
+    glLinkProgram(warpProgram.id);
+
+    glGetProgramiv(warpProgram.id, GL_LINK_STATUS, &isLinked);
+    if (isLinked == GL_FALSE){
+        cerr << "Failed to link shader program" << endl;
+        return false;
+    }
+
+    pixelPoints.VAO.resize(1);
+    pixelPoints.VBO.resize(3);
+    glGenVertexArrays(1, pixelPoints.VAO.data());
+    glGenBuffers(3, pixelPoints.VBO.data());
+
+    glBindVertexArray(pixelPoints.VAO[0]);
+
+    // preset pixel 2D locations
+    glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[0]);
+    GLfloat *pixelVertices = new GLfloat[2 * width * height];
+    int count = 0;
+    for (int i = 0; i < height; i++){
+        for (int j = 0; j < width; j++){
+            pixelVertices[count++] = (GLfloat)j * 2.0 / width - 1.0;
+            pixelVertices[count++] = (GLfloat)i * 2.0 / height - 1.0;
+        }
+    }
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2 * width * height, pixelVertices, GL_STATIC_DRAW);
+    delete[] pixelVertices;
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    // colors
+    glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[1]);
+    glVertexAttribPointer(1, 3, GL_UNSIGNED_BYTE, GL_FALSE, 0, 0);
+
+    // depths
+    glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[2]);
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glBindVertexArray(0);
+
     return true;
 }
 
@@ -270,7 +314,7 @@ void glModelWindow::reloadVertexBuffer(){
         origMeshes.resize(mesh_list.size());
         for (int i = 0; i < mesh_list.size(); i++){
             // load vertex information to a single VBO
-            GLfloat *buf = new GLfloat[9 * mesh_list[i]->getNumVerts()];
+            GLfloat *buf = new GLfloat[7 * mesh_list[i]->getNumVerts()];
             GLfloat *pbuf = buf;
             float colors[3];
             for (int j = 0; j < mesh_list[i]->getNumVerts(); j++){
@@ -283,13 +327,14 @@ void glModelWindow::reloadVertexBuffer(){
                 }
                 memcpy(pbuf, verts, 3 * sizeof(GLfloat));
                 memcpy(pbuf + 3, norms, 3 * sizeof(GLfloat));
-                memcpy(pbuf + 6, colors, 3 * sizeof(GLfloat));
-                pbuf += 9;
+                memcpy(pbuf + 6, rgb, 3 * sizeof(unsigned char));
+                pbuf += 7;
             }
 
-            glGenBuffers(1, &origMeshes[i].VBO);
-            glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].VBO);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 9 * mesh_list[i]->getNumVerts(), buf, GL_STATIC_DRAW);
+            origMeshes[i].VBO.resize(1);
+            glGenBuffers(1, origMeshes[i].VBO.data());
+            glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].VBO[0]);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 7 * mesh_list[i]->getNumVerts(), buf, GL_STATIC_DRAW);
 
             delete[] buf;
 
@@ -327,12 +372,12 @@ void glModelWindow::reloadVertexBuffer(){
             for (int j = 0; j < numTex; j++){
                 glBindVertexArray(origMeshes[i].VAO[j]);
 
-                glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].VBO);
-                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0);
+                glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].VBO[0]);
+                glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), 0);
                 glEnableVertexAttribArray(0);
-                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
+                glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
                 glEnableVertexAttribArray(1);
-                glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
+                glVertexAttribPointer(2, 3, GL_UNSIGNED_BYTE, GL_FALSE, 7 * sizeof(float), (void*)(6 * sizeof(float)));
                 glEnableVertexAttribArray(2);
 
                 glBindBuffer(GL_ARRAY_BUFFER, origMeshes[i].coordVBO[j]);
@@ -351,7 +396,8 @@ void glModelWindow::reloadVertexBuffer(){
         // initialize simplified mesh and related buffers
         simpMeshes.resize(pmesh_list.size());
         for (int i = 0; i < pmesh_list.size(); i++){
-            glGenBuffers(1, &simpMeshes[i].VBO);
+            simpMeshes[i].VBO.resize(1);
+            glGenBuffers(1, simpMeshes[i].VBO.data());
             
             int numTex = pmesh_list[i].mesh->getMesh()->getNumTex() + 1;
             simpMeshes[i].VAO.resize(numTex);
@@ -367,7 +413,7 @@ void glModelWindow::reloadVertexBuffer(){
     for (int i = 0; i < pmesh_list.size(); i++){
         PMesh *pmesh = pmesh_list[i].mesh;
         // reload vertex information to a single VBO
-        GLfloat *buf = new GLfloat[9 * pmesh->getMesh()->getNumVerts()];
+        GLfloat *buf = new GLfloat[7 * pmesh->getMesh()->getNumVerts()];
         GLfloat *pbuf = buf;
         float colors[3];
         for (int j = 0; j < pmesh->getMesh()->getNumVerts(); j++){
@@ -380,12 +426,12 @@ void glModelWindow::reloadVertexBuffer(){
             }
             memcpy(pbuf, verts, 3 * sizeof(GLfloat));
             memcpy(pbuf + 3, norms, 3 * sizeof(GLfloat));
-            memcpy(pbuf + 6, colors, 3 * sizeof(GLfloat));
-            pbuf += 9;
+            memcpy(pbuf + 6, rgb, 3 * sizeof(unsigned char));
+            pbuf += 7;
         }
 
-        glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 9 * pmesh->getMesh()->getNumVerts(), buf, GL_STATIC_DRAW);
+        glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].VBO[0]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 7 * pmesh->getMesh()->getNumVerts(), buf, GL_STATIC_DRAW);
 
         delete[] buf;
 
@@ -416,12 +462,12 @@ void glModelWindow::reloadVertexBuffer(){
         for (int j = 0; j < numTex; j++){
             glBindVertexArray(simpMeshes[i].VAO[j]);
 
-            glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].VBO);
-            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), 0);
+            glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].VBO[0]);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), 0);
             glEnableVertexAttribArray(0);
-            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
+            glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
             glEnableVertexAttribArray(1);
-            glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6 * sizeof(float)));
+            glVertexAttribPointer(2, 3, GL_UNSIGNED_BYTE, GL_FALSE, 7 * sizeof(float), (void*)(6 * sizeof(float)));
             glEnableVertexAttribArray(2);
 
             glBindBuffer(GL_ARRAY_BUFFER, simpMeshes[i].coordVBO[j]);
@@ -486,7 +532,7 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
         reloadVertexBuffer();
     }
 
-    glUseProgram(shaderProgram);
+    glUseProgram(renderProgram.id);
     
     // Set lookat point
     glLoadIdentity();
@@ -498,16 +544,16 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
 
     glm::mat4 model, view, projection;
     glGetFloatv(GL_MODELVIEW_MATRIX, glm::value_ptr(view));
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(glGetUniformLocation(renderProgram.id, "view"), 1, GL_FALSE, glm::value_ptr(view));
     glGetFloatv(GL_PROJECTION_MATRIX, glm::value_ptr(projection));
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(renderProgram.id, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
     
     glm::vec3 viewPos(viewX, viewY, viewZ);
     glm::vec3 lightPos(0.0, 0.0, 10.0);
     glm::vec3 lightColor(1.0, 1.0, 1.0);
-    glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(viewPos));
-    glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, glm::value_ptr(lightPos));
-    glUniform3fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, glm::value_ptr(lightColor));
+    glUniform3fv(glGetUniformLocation(renderProgram.id, "viewPos"), 1, glm::value_ptr(viewPos));
+    glUniform3fv(glGetUniformLocation(renderProgram.id, "lightPos"), 1, glm::value_ptr(lightPos));
+    glUniform3fv(glGetUniformLocation(renderProgram.id, "lightColor"), 1, glm::value_ptr(lightColor));
     
     if (bSmooth_){
         glShadeModel(GL_SMOOTH); // already defined in initOpenGL
@@ -537,7 +583,7 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
         glLoadIdentity();
         glTranslatef(pmesh_list[m].pos.x, pmesh_list[m].pos.y, pmesh_list[m].pos.z);
         glGetFloatv(GL_MODELVIEW_MATRIX, glm::value_ptr(model));
-        glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(glGetUniformLocation(renderProgram.id, "model"), 1, GL_FALSE, glm::value_ptr(model));
         if (simplified){
             for (int i = 0; i < simpMeshes[m].VAO.size(); i++){
                 if (conf.texture){
@@ -600,8 +646,6 @@ bool glModelWindow::displayMesh(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, D
 }
 
 bool glModelWindow::displayImage(unsigned char* inbuf){
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
     if (inbuf != NULL){
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDrawPixels(width, height, GL_RGB, GL_UNSIGNED_BYTE, inbuf);
@@ -632,6 +676,7 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
     memset(warpedDepth, 0, sizeof(float) * width * height);
     
     /* warping */
+    /*
     index = 0;
     for (int h = 0; h < height; h++){
         for (int w = 0; w < width; w++){
@@ -651,6 +696,7 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
             index++;
         }
     }
+    */
     
     // hole filling
     unsigned char *warpedDiff2 = new unsigned char[3 * width * height];
@@ -713,12 +759,45 @@ bool glModelWindow::displayImage(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *prevf
     return true;
 }
 
-bool glModelWindow::patchFrame(unsigned char* inbuf, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame){
-    for (int i = 0; i < 3 * width * height; i++){
-        frame->image[i] = (unsigned char)max(min(2 * ((int)inbuf[i] - 127) + (int)frame->image[i], 255), 0);
+bool glModelWindow::warpFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *target){
+    glUseProgram(warpProgram.id);
+    glBindVertexArray(pixelPoints.VAO[0]);
+
+    glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(unsigned char) * 3 * width * height, frame->image, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ARRAY_BUFFER, pixelPoints.VBO[2]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * width * height, frame->depth, GL_STATIC_DRAW);
+
+    glm::mat4 mvp = target->mvp * glm::inverse(frame->mvp);
+    glUniformMatrix4fv(glGetUniformLocation(warpProgram.id, "mvp"), 1, GL_FALSE, glm::value_ptr(mvp));
+
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glDrawElements(GL_POINTS, width * height, GL_UNSIGNED_INT, NULL);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, target->image);
+
+    glBindVertexArray(0);
+    glUseProgram(0);
+}
+
+bool glModelWindow::patchFrame(FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *delta, FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> *frame){
+    if (delta->mvp != frame->mvp){
+        // warp needed
+        cout << "warp needed" << endl;
+        FrameInfo<DEFAULT_WIDTH, DEFAULT_HEIGHT> target;
+        target.mvp = frame->mvp;
+        warpFrame(delta, &target);
+        for (int i = 0; i < 3 * width * height; i++){
+            frame->image[i] = (unsigned char)max(min(2 * ((int)target.image[i] - 127) + (int)frame->image[i], 255), 0);
+        }
     }
-    memcpy(frame->diff, inbuf, 3 * width * height);
-    frame->patched = true;
+    else {
+        // patch directly
+        for (int i = 0; i < 3 * width * height; i++){
+            frame->image[i] = (unsigned char)max(min(2 * ((int)delta->image[i] - 127) + (int)frame->image[i], 255), 0);
+        }
+    }
     
     return true;
 }
